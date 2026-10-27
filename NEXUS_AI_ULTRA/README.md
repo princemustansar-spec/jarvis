@@ -1,17 +1,23 @@
 # NEXUS AI ULTRA
 
-Independent Python + local browser Windows assistant, built from scratch. No existing JARVIS or ZAYRON source was used. Midnight navy dashboard, animated cyan AI core, 17 navigation sections, real system telemetry, an approval-controlled tool registry, persistent SQLite records and configurable API integrations.
+Independent Python Windows desktop assistant hosted in a lightweight pywebview window. The existing backend and dashboard are reused unchanged. No existing JARVIS or ZAYRON source was used. Midnight navy dashboard, animated cyan AI core, 17 navigation sections, real system telemetry, an approval-controlled tool registry, persistent SQLite records and configurable API integrations.
 
 **Release status:** tested core implementation, not fully verified Windows handover. Real AI conversation requires your configured running provider. This environment had no provider credentials or local model. Transport tests use explicit test doubles, never displayed as real AI connectivity. Windows desktop, microphone, OS credential vault and image-provider verification remain necessary on your computer.
 
 ## Windows installation
 
-1. Install Python 3.11+ 64-bit from python.org with the Python launcher enabled.
+1. For source installation, install Python 3.11 or 3.12 x64 from python.org with the Python launcher enabled. A built portable release does not require Python on the target PC.
 2. Extract the project to `C:\NEXUS_AI_ULTRA` (or another folder you own).
-3. Double-click `INSTALL.bat`. It creates a local virtual environment and installs dependencies with TLS verification enabled.
-4. Double-click `START_NEXUS.bat`. The local dashboard opens in your browser. Keep the console open.
-5. For a desktop shortcut: right-click `START_NEXUS.bat` → Show more options → Send to → Desktop.
-6. To stop, press Ctrl+C in the console, or double-click `STOP_NEXUS.bat`. The stopper checks the PID's project path before terminating it.
+3. Double-click `INSTALL.bat`. It installs the backend and pywebview, then creates a native desktop shortcut. The GUI uses Microsoft Edge WebView2 Evergreen Runtime, normally present on Windows 11; install it from Microsoft if missing.
+4. Double-click `START_NEXUS.bat` or the NEXUS desktop shortcut. The unchanged dashboard opens in its own native window, without launching the default browser or leaving a console open.
+5. Recreate the shortcut with `CREATE_DESKTOP_SHORTCUT.bat` after relocating the source folder or building the portable executable.
+6. Close the desktop window to stop its owned API gracefully. `STOP_NEXUS.bat` is an emergency alternative and checks process identity before terminating. Your data remains in the same location.
+
+### Portable executable (build on Windows)
+
+Run `BUILD_WINDOWS.bat` after installation. It creates `dist\NEXUS_AI_ULTRA\NEXUS_AI_ULTRA.exe` with PyInstaller. Distribute the **entire** `dist\NEXUS_AI_ULTRA` directory, including `_internal`; users can launch the EXE without installing Python. WebView2 Evergreen Runtime is still required. This is an independent desktop window, not a browser shortcut. The one-folder build avoids repeated one-file unpacking and reuses the OS WebView2 runtime instead of bundling Chromium. No executable has been built or native-rendered in this Linux cloud; Windows acceptance remains pending.
+
+Only intentional web-search/WhatsApp/browser tools or clicked external result links can open a browser, preserving existing button behavior. App startup never calls the default browser, and missing WebView2 produces an error instead of a browser fallback. The HTML, CSS and JavaScript bytes are unchanged. Embedded WebView2 speech-recognition support may differ from Chrome/Edge browser; microphone capabilities must be checked on the PC.
 
 Optional screenshot support: run `.venv\Scripts\python -m pip install -r requirements-optional.txt` from this folder. Pillow is not needed for other modules.
 
@@ -22,7 +28,7 @@ Open Settings. The application uses OpenAI-compatible APIs including Gemini's co
 - Configure the API base URL, not the full chat-completions URL. Local defaults are `http://127.0.0.1:31415/v1`, `http://127.0.0.1:3847/v1` and Ollama's `http://127.0.0.1:11434/v1`.
 - If your FreeLLMAPI server has a different API path, edit the base accordingly. Compatibility must be verified with your server.
 - Enter credentials in the password field. They go to the OS credential vault through `keyring`, not SQLite or source code. Blank retains an existing credential. If a vault is unavailable, saving a new key fails clearly; it never silently falls back to a plaintext file.
-- Alternatively, securely supply `NEXUS_KEY_<PROVIDER_ID>` as an environment variable. Uppercase ID, with hyphens replaced by underscores: `NEXUS_KEY_GROQ`, `NEXUS_KEY_FREELLM_ALT`, etc. `.env.example` documents names; the app intentionally does not load a plaintext `.env` file.
+- Alternatively, securely supply `NEXUS_KEY_<PROVIDER_ID>` as an environment variable. Uppercase ID, with hyphens replaced by underscores: `NEXUS_KEY_GROQ`, `NEXUS_KEY_FREELLM_ALT`, etc. The app intentionally does not load a plaintext `.env` file. Example variable names appear above; credential files are excluded from GitHub uploads.
 - Save all providers, then Test saved endpoint. Copy an actual model ID returned by the endpoint into the model field and save again. An authenticated `/models` response verifies that endpoint only; a successful chat additionally verifies inference.
 - Enable providers you want to use. Choose a preferred provider; other enabled providers are fallback candidates. Enabled endpoints are probed at app startup.
 - Remote commercial providers default to “may incur cost.” Check “Allow paid request” per chat/image request to authorize those calls, including fallback calls in that request. Do not mark a paid service free unless you have independently verified its billing policy.
@@ -64,7 +70,10 @@ NEXUS_AI_ULTRA/
   static/             HTML, CSS, JavaScript dashboard
   tests/              isolated integration/unit tests
   docs/               guides, test report, browser evidence
-  run.py / stop.py    local lifecycle
+  nexus/desktop.py    native WebView2 host and owned server lifecycle
+  run.py / stop.py    desktop/headless entry points
+  create_shortcut.py  native Windows desktop shortcut
+  BUILD_WINDOWS.bat / nexus_desktop.spec  portable EXE build
   INSTALL.bat / START_NEXUS.bat / STOP_NEXUS.bat
 ```
 
@@ -76,12 +85,14 @@ Python 3.11+; tested here with Python 3.12 on Linux. Use the existing project fo
 python -m venv .venv
 # Windows: .venv\Scripts\python ; Linux: .venv/bin/python
 .venv/bin/python -m pip install -r requirements.txt
-NEXUS_DATA_DIR=/workspace/nexus-runtime .venv/bin/python run.py --no-browser
+NEXUS_DATA_DIR=/workspace/nexus-runtime .venv/bin/python run.py --headless
 .venv/bin/python -m pytest -q
 ```
 
 On Windows run `.venv\Scripts\python run.py` without the Linux environment assignment. Browser layout tests and screenshots are documented in `docs/TEST_REPORT.md`.
 
-Performance targets on the baseline i3 / 4 GB Windows 11 machine: backend startup under 3 seconds, backend idle RSS under 120 MB, backend average idle CPU below 2%, local dashboard interactions under 200 ms excluding network/AI calls. Browser memory is additional. Actual baseline hardware measurements remain pending; cloud measurements are not equivalent.
+Performance targets on the baseline i3 / 4 GB Windows 11 machine: backend startup under 3 seconds, backend idle RSS under 120 MB, backend average idle CPU below 2%, local dashboard interactions under 200 ms excluding network/AI calls. WebView2 renderer memory is additional. Target total steady-state desktop working set is below 300 MB with one idle window, to be measured on the baseline PC. One backend process, one WebView2 window, no model preload, no debug server and no additional monitoring timer are used. Actual baseline hardware measurements remain pending; cloud measurements are not equivalent.
 
 See `docs/USER_GUIDE_ROMAN_URDU.md`, `docs/TROUBLESHOOTING.md`, and `PROGRESS.md`.
+
+Desktop conversion details and validation: `docs/DESKTOP_TEST_REPORT.md`.

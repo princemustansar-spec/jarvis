@@ -30,3 +30,17 @@ Requires real credentials/hardware; do not mark complete without evidence:
 Explicitly outside current implementation: background wake-word detection, arbitrary scheduled desktop workflows, video generation/editing, built-in webpage retrieval, large bundled local models and destructive optimizer actions. No UI claims these are working.
 
 Resume: use this project folder, read docs/TEST_REPORT.md, configure one real provider through app Settings, run a real chat, then run Windows hardware checks above. Continue from this checklist; do not replace working components or restart the project.
+
+## Desktop conversion (existing application, version 0.2.0)
+
+- [x] Same HTML/CSS/JavaScript preserved byte-for-byte
+- [x] pywebview/Edge WebView2 host, no default browser at launch
+- [x] Actual API readiness before native window; owned backend shutdown on close
+- [x] Console-free Windows launcher, native shortcut creator, bounded diagnostics
+- [x] Portable Windows onedir EXE build recipe with existing assets
+- [x] 33 tests pass, including real embedded backend lifecycle and original API tests
+- [x] 4 GB design constraints and measured backend cloud footprint documented
+- [ ] Native Windows WebView2 rendering, microphone and complete process-tree RAM acceptance
+- [ ] Build and verify the portable executable on Windows x64
+
+Read docs/DESKTOP_TEST_REPORT.md for evidence and Windows acceptance steps. The previous original browser implementation report is historical; startup now uses the native desktop host. Do not confuse mocked native-host tests with a real Windows window test.

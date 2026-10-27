@@ -1,25 +1,61 @@
+"""Start NEXUS in one native Windows window; headless mode is explicit."""
 import argparse
+import logging
+from logging.handlers import RotatingFileHandler
 import os
-import threading
-import socket
-import webbrowser
 from pathlib import Path
-import uvicorn
+import sys
+
+from nexus.desktop import LocalBackend, load_webview, run_desktop
+
+
+def configure_logging(data):
+    handlers = [RotatingFileHandler(data / 'desktop.log', maxBytes=1_000_000, backupCount=2, encoding='utf-8')]
+    if sys.stderr is not None:
+        handlers.append(logging.StreamHandler(sys.stderr))
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(name)s: %(message)s', handlers=handlers, force=True)
+
+
+def report_error(message):
+    logging.error('%s', message)
+    if sys.platform == 'win32':
+        import ctypes
+        ctypes.windll.user32.MessageBoxW(None, message, 'NEXUS AI ULTRA', 0x10)
+    elif sys.stderr is not None:
+        print(message, file=sys.stderr)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='NEXUS native desktop application (Windows WebView2).')
+    parser.add_argument('--headless', '--no-browser', dest='headless', action='store_true', help='Run only the local API for development/tests; never open a browser.')
+    args = parser.parse_args(argv)
+    backend = None
+    try:
+        data = Path(os.getenv('NEXUS_DATA_DIR', str(Path.home() / '.nexus_ai_ultra')))
+        data.mkdir(parents=True, exist_ok=True)
+        configure_logging(data)
+        # Resolve desktop prerequisites before starting an otherwise invisible API.
+        webview = None if args.headless else load_webview()
+        backend = LocalBackend(data)
+        if args.headless:
+            backend.prepare()
+            backend.run()
+            if backend.failure:
+                raise RuntimeError('Backend failed. See desktop.log.') from backend.failure
+        else:
+            run_desktop(backend, webview)
+        return 0
+    except Exception as exc:
+        report_error(str(exc))
+        return 1
+    finally:
+        if backend:
+            try:
+                backend.close()
+            except Exception as exc:
+                report_error(str(exc))
+                return 1
+
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--no-browser',action='store_true')
-    args = parser.parse_args()
-    data = Path(os.getenv('NEXUS_DATA_DIR',str(Path.home()/'.nexus_ai_ultra')))
-    data.mkdir(parents=True,exist_ok=True)
-    pidfile = data/'server.pid'
-    with socket.socket() as check:
-        if check.connect_ex(('127.0.0.1',8765)) == 0:
-            print('Port 8765 is already in use. Stop the existing app before starting NEXUS.')
-            raise SystemExit(1)
-    if not args.no_browser:
-        threading.Timer(1.5,lambda:webbrowser.open('http://127.0.0.1:8765')).start()
-    pidfile.write_text(str(os.getpid()))
-    try: uvicorn.run('nexus.app:app',host='127.0.0.1',port=8765,log_level='info')
-    finally:
-        if pidfile.exists() and pidfile.read_text()==str(os.getpid()): pidfile.unlink()
+    raise SystemExit(main())

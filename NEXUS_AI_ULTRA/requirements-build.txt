@@ -1,0 +1,2 @@
+# Build only on Windows x64. Not installed for normal application use.
+pyinstaller==6.16.0

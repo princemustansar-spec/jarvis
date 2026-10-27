@@ -1,8 +1,8 @@
 # NEXUS istemal karne ka tareeqa
 
-1. Python 3.11 ya naya 64-bit version install karein. Project extract karein.
+1. Python 3.11 ya 3.12 64-bit version install karein. Project extract karein.
 2. `INSTALL.bat` par double-click karein. Error aaye to console ka paigham dekhein.
-3. `START_NEXUS.bat` kholein. Dashboard browser mein khul jayega.
+3. `START_NEXUS.bat` kholein. Dashboard apni pywebview desktop window mein khulega; default browser app launch par nahin khulega.
 4. Settings mein apna provider, API base aur exact model configure karein. API key sirf app ke password field mein dein; chat ya source mein nahin.
 5. Save karein, phir endpoint Test karein. “Not verified” ka matlab connection abhi sabit nahin hua. Models ki list se asal model name use karein.
 6. Paid provider ke liye har request se pehle “Allow paid request” khud select karein. Charges provider ki policy ke mutabiq honge.
@@ -14,6 +14,11 @@
 12. WhatsApp Center sirf draft kholta hai. Send aap WhatsApp mein khud karein.
 13. Media Studio ke liye image API aur image model zaroori hain. Video editing is version mein available nahin.
 14. Emergency Stop se active AI request aur pending approvals rokein. Pehle ho chuki action ya paid remote request undo nahin hoti. Safety Center se Resume karein.
-15. App band karne ke liye console mein Ctrl+C ya `STOP_NEXUS.bat` istemal karein.
+15. App band karne ke liye desktop window close karein; is se local backend bhi stop hota hai. Emergency ke liye `STOP_NEXUS.bat` hai.
 
 RAM monitor asli numbers dikhata hai. “RAM boost” ke naam par apps band nahin hotin. Windows-only tool cloud Linux machine par unsupported ka message dega.
+
+
+Desktop shortcut INSTALL.bat banata hai. Dobara banane ke liye CREATE_DESKTOP_SHORTCUT.bat chalayein. WebView2 missing ka error aaye to Microsoft ki website se WebView2 Evergreen Runtime install karein. Browser khol kar app chalana ab zaroori nahin.
+
+Portable EXE ke liye Windows par BUILD_WINDOWS.bat chalayein. dist\NEXUS_AI_ULTRA ka POORA folder doosray PC par copy karein, sirf EXE nahin. Us PC par Python zaroori nahin, lekin WebView2 runtime zaroori hai. Is Linux cloud mein Windows EXE build aur asli window ka test nahin hua.
