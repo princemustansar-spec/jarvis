@@ -1,0 +1,26 @@
+[
+  {
+    "viewport": "1366x768",
+    "horizontalOverflow": false
+  },
+  {
+    "viewport": "1536x1024",
+    "horizontalOverflow": false
+  },
+  {
+    "viewport": "1920x1080",
+    "horizontalOverflow": false
+  },
+  {
+    "viewport": "390x844",
+    "horizontalOverflow": false
+  },
+  {
+    "navigationSections": 17,
+    "memoryPersistence": true,
+    "systemTool": true,
+    "emergencyStopResume": true,
+    "fileApproval": true,
+    "jsErrors": []
+  }
+]

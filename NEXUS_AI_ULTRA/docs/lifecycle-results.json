@@ -1,0 +1,9 @@
+{
+  "startup_seconds": 0.345,
+  "restart_seconds": 0.312,
+  "idle_cpu_percent": 0.3,
+  "rss_mb": 43.7,
+  "restart_persistence": true,
+  "shutdown": true,
+  "platform": "posix"
+}
