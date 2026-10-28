@@ -1,0 +1,59 @@
+{
+  "results": [
+    {
+      "size": "1366x768",
+      "horizontalOverflow": false,
+      "coreDiameter": 183.5,
+      "dashboardFits": true,
+      "settingsScrollable": true,
+      "settingsBottomButtonAccessible": true,
+      "unsavedInputPreserved": true
+    },
+    {
+      "size": "1920x1080",
+      "horizontalOverflow": false,
+      "coreDiameter": 320.938,
+      "dashboardFits": true,
+      "settingsScrollable": true,
+      "settingsBottomButtonAccessible": true,
+      "unsavedInputPreserved": true
+    },
+    {
+      "size": "1366x650",
+      "horizontalOverflow": false,
+      "coreDiameter": 176,
+      "dashboardFits": "vertical scrolling allowed",
+      "settingsScrollable": true,
+      "settingsBottomButtonAccessible": true,
+      "unsavedInputPreserved": true
+    },
+    {
+      "size": "1093x614",
+      "horizontalOverflow": false,
+      "coreDiameter": 230,
+      "dashboardFits": "vertical scrolling allowed",
+      "settingsScrollable": true,
+      "settingsBottomButtonAccessible": true,
+      "unsavedInputPreserved": true
+    },
+    {
+      "size": "800x600",
+      "horizontalOverflow": false,
+      "coreDiameter": 230,
+      "dashboardFits": "vertical scrolling allowed",
+      "settingsScrollable": true,
+      "settingsBottomButtonAccessible": true,
+      "unsavedInputPreserved": true
+    },
+    {
+      "size": "390x844",
+      "horizontalOverflow": false,
+      "coreDiameter": 230,
+      "dashboardFits": "vertical scrolling allowed",
+      "settingsScrollable": true,
+      "settingsBottomButtonAccessible": true,
+      "unsavedInputPreserved": true
+    }
+  ],
+  "jsErrors": []
+}

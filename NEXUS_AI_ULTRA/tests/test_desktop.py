@@ -110,10 +110,10 @@ def test_main_desktop_default_and_headless_alias(tmp_path,monkeypatch):
     assert run.main(['--no-browser'])==0
 
 
-def test_gui_files_match_original_uploaded_design():
+def test_gui_markup_and_actions_preserve_existing_design():
     import hashlib
     root=Path(__file__).resolve().parent.parent
-    original_hashes = {'index.html': '5f02dc402cb95cb001fa82b94f29864493e6948411e4a364af0a93cbfdeb6766', 'style.css': 'e5101c992c3f00d4a622753613afb1eb65297befb4bcf6201c0fcc264cbb0158', 'app.js': 'b051b7cf8607313690c4ea88fe77a088670638815b97d8e5314c6b4197269d89'}
+    original_hashes = {'index.html': '5f02dc402cb95cb001fa82b94f29864493e6948411e4a364af0a93cbfdeb6766', 'app.js': 'b051b7cf8607313690c4ea88fe77a088670638815b97d8e5314c6b4197269d89'}
     for name, digest in original_hashes.items():
         assert hashlib.sha256((root/'static'/name).read_bytes()).hexdigest()==digest
 

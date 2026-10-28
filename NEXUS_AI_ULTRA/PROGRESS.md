@@ -44,3 +44,15 @@ Resume: use this project folder, read docs/TEST_REPORT.md, configure one real pr
 - [ ] Build and verify the portable executable on Windows x64
 
 Read docs/DESKTOP_TEST_REPORT.md for evidence and Windows acceptance steps. The previous original browser implementation report is historical; startup now uses the native desktop host. Do not confuse mocked native-host tests with a real Windows window test.
+
+## Laptop auto-fit correction — 28 October 2026
+
+- [x] Existing dashboard adapts to usable window width and height
+- [x] AI core/rings scale to their own container without cropping
+- [x] Sidebar and Settings remain vertically accessible
+- [x] All dashboard action buttons fit at 1366×768 and 1920×1080
+- [x] Resize preserves unsaved Settings input; smaller/scaled-window fallbacks tested
+- [x] Navy/cyan palette, HTML, action JavaScript and all backend/native-host functionality preserved
+- [x] 33 Python tests and both browser suites passed
+
+The stylesheet intentionally supersedes the earlier desktop-conversion CSS hash baseline. Read docs/AUTOFIT_TEST_REPORT.md for current layout evidence.

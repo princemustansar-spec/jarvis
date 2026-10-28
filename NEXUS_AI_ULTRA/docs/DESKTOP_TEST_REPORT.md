@@ -1,5 +1,7 @@
 # pywebview desktop conversion — 27 October 2026
 
+Historical conversion report. The later 28 October viewport-fit correction intentionally updates responsive CSS; HTML/actions and the native host remain unchanged. See AUTOFIT_TEST_REPORT.md for current layout evidence.
+
 ## Change and preservation
 
 The existing application is hosted by pywebview 6.2.1 with the Windows Edge WebView2 renderer. The native entry point starts one owned Uvicorn backend in a thread, waits for a successful `/api/state` response containing the expected PID and 18 tools, then creates the native window. Closing the window shuts down that backend, cancels outstanding requests through Uvicorn's bounded shutdown and removes its PID file. The default browser is never called by the app launcher. `--headless` is an explicit API-only development mode; `--no-browser` remains an alias.

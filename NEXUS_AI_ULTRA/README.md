@@ -96,3 +96,7 @@ Performance targets on the baseline i3 / 4 GB Windows 11 machine: backend startu
 See `docs/USER_GUIDE_ROMAN_URDU.md`, `docs/TROUBLESHOOTING.md`, and `PROGRESS.md`.
 
 Desktop conversion details and validation: `docs/DESKTOP_TEST_REPORT.md`.
+
+## Automatic laptop/window fitting
+
+The existing JARVIS navy/cyan dashboard automatically responds to usable window width **and height**. The AI core scales inside its panel; dashboard controls fit at 1366×768 and 1920×1080. Settings has a vertical scrollbar, with its bottom save controls reachable. On smaller windows or scaled displays, vertical scrolling preserves readable controls. Resizing does not reload the page or discard unsaved settings. No manual resolution setting is required. See `docs/AUTOFIT_TEST_REPORT.md` for screenshots, checks and Windows verification limits. If using an already-built portable executable, run BUILD_WINDOWS.bat again to package the updated CSS.
