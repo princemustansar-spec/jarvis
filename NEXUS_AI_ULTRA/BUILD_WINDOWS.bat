@@ -5,7 +5,7 @@ if not exist .venv\Scripts\python.exe (
  pause
  exit /b 1
 )
-.venv\Scripts\python -m pip install -r requirements-build.txt -r requirements-optional.txt
+.venv\Scripts\python -m pip install -r requirements-build.txt -r requirements-optional.txt -r requirements-voice.txt
 if errorlevel 1 goto failed
 .venv\Scripts\python -m PyInstaller --noconfirm nexus_desktop.spec
 if errorlevel 1 goto failed

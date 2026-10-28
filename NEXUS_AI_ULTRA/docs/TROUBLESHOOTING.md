@@ -31,3 +31,7 @@ Data lives in the per-user `.nexus_ai_ultra` directory. Stop the app before back
 - **Need a development API without a window:** run `.venv\Scripts\python run.py --headless`. The old --no-browser flag remains an alias. Neither flag starts a browser.
 - **Microphone unavailable in embedded view:** WebView2 may not provide the browser SpeechRecognition API on your version. The existing capability warning remains accurate; text chat and other tools continue. Do not assume browser voice tests prove WebView2 voice support.
 - **Desktop consumes more RAM than backend report:** Task Manager includes WebView2 child processes. The dashboard reports backend RSS only. Measure the full process tree for a meaningful comparison.
+
+## Python microphone (supersedes the browser recognition guidance above)
+
+The WebView2 "Microphone: network" recognizer has been removed. Run INSTALL_VOICE.bat for an existing source install, or rebuild the portable EXE. Install the offline model through Voice Assistant once. Then run diagnostics and the 3-second input test. Enable Windows microphone access for desktop apps, select the real input and check mute/gain. Browser microphone permission is no longer the capture mechanism. See OFFLINE_VOICE_GUIDE.md for missing PortAudio/VC++ DLLs, model-host/checksum errors, silent/clipped audio, offline use, approximate Roman Urdu and cancellation. Existing speechSynthesis speaker output is separate and unchanged.

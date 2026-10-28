@@ -1,0 +1,16 @@
+{
+  "microphone": {
+    "phase": "error",
+    "error": "Python voice dependencies are missing or cannot load. Run INSTALL_VOICE.bat. On Windows also check the Microsoft Visual C++ x64 runtime.",
+    "error_type": "OSError",
+    "model_ready": false
+  },
+  "model_download": {
+    "phase": "error",
+    "error": "Offline model download failed (ProxyError). Check Internet access to huggingface.co and its Hugging Face/Xet download hosts, then retry. Existing chat remains available.",
+    "error_type": "ProxyError",
+    "model_ready": false
+  },
+  "backend_rss_mb": 44.0,
+  "platform": "Linux cloud; no Windows desktop or physical microphone"
+}

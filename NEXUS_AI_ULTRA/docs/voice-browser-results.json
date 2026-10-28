@@ -1,0 +1,13 @@
+{
+  "transportDoubles": true,
+  "browserSpeechRecognitionCalls": 0,
+  "englishAndUrduOptions": true,
+  "pythonConsentPayload": true,
+  "stopThenTranscribe": true,
+  "reconnectAfterReload": true,
+  "romanTranscriptReview": true,
+  "noAutomaticChatSend": true,
+  "diagnosticDevicePicker": true,
+  "speakerFunctionPreserved": "covered by Python hash test",
+  "jsErrors": []
+}

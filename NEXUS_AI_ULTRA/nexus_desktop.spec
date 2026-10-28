@@ -1,6 +1,7 @@
 # Build a portable Windows folder; no bundled Chromium or one-file extraction.
 from pathlib import Path
 import sys
+from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs
 
 if sys.platform != 'win32':
     raise SystemExit('Build this executable on Windows x64; cross-compiling Windows is unsupported.')
@@ -8,8 +9,9 @@ if sys.platform != 'win32':
 root = Path(SPECPATH)
 a = Analysis(
     [str(root / 'run.py')], pathex=[str(root)],
-    datas=[(str(root / 'static'), 'static')],
-    hiddenimports=['nexus.app', 'webview.platforms.winforms', 'webview.platforms.edgechromium', 'keyring.backends.Windows', 'PIL.ImageGrab'],
+    datas=[(str(root / 'static'), 'static')] + collect_data_files('faster_whisper') + collect_data_files('uroman') + collect_data_files('_sounddevice_data'),
+    binaries=collect_dynamic_libs('ctranslate2') + collect_dynamic_libs('_sounddevice_data'),
+    hiddenimports=['nexus.app', 'webview.platforms.winforms', 'webview.platforms.edgechromium', 'keyring.backends.Windows', 'PIL.ImageGrab', 'nexus.voice', 'sounddevice', 'faster_whisper', 'uroman', 'onnxruntime', 'tokenizers', 'av'],
     excludes=['pytest', 'PyQt5', 'PyQt6', 'PySide2', 'PySide6', 'cefpython3', 'tkinter'],
     noarchive=False,
 )

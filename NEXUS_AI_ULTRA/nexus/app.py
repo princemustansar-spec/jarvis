@@ -13,12 +13,14 @@ from fastapi.staticfiles import StaticFiles
 from .store import Store
 from .providers import Providers
 from .tools import Tools, CATALOG
+from .voice import VoiceService
 
 BASE = Path(__file__).resolve().parent.parent
 DATA = Path(os.getenv('NEXUS_DATA_DIR', str(Path.home() / '.nexus_ai_ultra')))
 store = Store(DATA / 'nexus.sqlite3')
 providers = Providers(store)
 tools = Tools(store)
+voice = VoiceService(DATA)
 session_token = secrets.token_urlsafe(32)
 pending = {}
 active = set()
@@ -40,6 +42,7 @@ async def lifespan(app):
     task = asyncio.create_task(scheduler())
     probes = [asyncio.create_task(providers.probe(p['id'])) for p in providers.configs() if p['enabled']]
     yield
+    await asyncio.to_thread(voice.cancel)
     task.cancel()
     for probe in probes: probe.cancel()
     await asyncio.gather(task, *probes, return_exceptions=True)
@@ -89,7 +92,8 @@ def state():
                 emergency=emergency, denied_tools=store.get('denied_tools', []), pending=[dict(id=k,**v) for k,v in pending.items() if v['expires'] > time.time()],
                 roots=tools.roots(),
                 chat=list(reversed(store.list('chat', 100))), memory=store.list('memory'), reminders=store.list('reminder'),
-                activity=store.list('activity',50), notifications=store.list('notification',50), preferred_provider=store.get('preferred_provider',''))
+                activity=store.list('activity',50), notifications=store.list('notification',50), preferred_provider=store.get('preferred_provider',''),
+                voice=voice.status(), voice_settings=store.get('voice_settings', {'device': None, 'language': 'en', 'seconds': 10}))
 
 @app.post('/api/settings')
 async def settings(request: Request):
@@ -153,6 +157,7 @@ async def safety(request: Request):
     b = await request.json()
     emergency = bool(b.get('stop',emergency))
     if emergency:
+        await asyncio.to_thread(voice.cancel)
         pending.clear()
         for task in tuple(active): task.cancel()
     if 'denied_tools' in b: store.set('denied_tools', [n for n in b['denied_tools'] if n in CATALOG])
@@ -229,3 +234,44 @@ async def image(request: Request):
     except (httpx.HTTPError, KeyError) as exc: raise ValueError(providers.error(exc))
 
 import httpx
+
+
+@app.get('/api/voice/status')
+def voice_status():
+    return voice.status()
+
+@app.post('/api/voice/start')
+async def voice_start(request: Request):
+    b = await request.json()
+    if emergency: raise ValueError('Emergency Stop active')
+    if b.get('consent') is not True: raise ValueError('Explicit microphone consent is required.')
+    settings = {'device': b.get('device'), 'language': b.get('language', 'en'), 'seconds': b.get('seconds', 10)}
+    result = await asyncio.to_thread(voice.start, 'capture', **settings)
+    store.set('voice_settings', settings)
+    return result
+
+@app.post('/api/voice/diagnostics')
+async def voice_diagnostics():
+    return await asyncio.to_thread(voice.start, 'diagnostics')
+
+@app.post('/api/voice/test')
+async def voice_test(request: Request):
+    b = await request.json()
+    if emergency: raise ValueError('Emergency Stop active')
+    if b.get('consent') is not True: raise ValueError('Explicit microphone consent is required.')
+    return await asyncio.to_thread(voice.start, 'test', device=b.get('device'), seconds=3)
+
+@app.post('/api/voice/model')
+async def voice_model(request: Request):
+    b = await request.json()
+    if emergency: raise ValueError('Emergency Stop active')
+    if b.get('confirm_download') is not True: raise ValueError('Confirm the one-time offline model download first.')
+    return await asyncio.to_thread(voice.start, 'model')
+
+@app.post('/api/voice/stop')
+async def voice_stop():
+    return await asyncio.to_thread(voice.stop_recording)
+
+@app.post('/api/voice/cancel')
+async def voice_cancel():
+    return await asyncio.to_thread(voice.cancel)

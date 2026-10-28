@@ -110,12 +110,14 @@ def test_main_desktop_default_and_headless_alias(tmp_path,monkeypatch):
     assert run.main(['--no-browser'])==0
 
 
-def test_gui_markup_and_actions_preserve_existing_design():
+def test_gui_design_and_voice_output_preserved():
     import hashlib
     root=Path(__file__).resolve().parent.parent
-    original_hashes = {'index.html': '5f02dc402cb95cb001fa82b94f29864493e6948411e4a364af0a93cbfdeb6766', 'app.js': 'b051b7cf8607313690c4ea88fe77a088670638815b97d8e5314c6b4197269d89'}
-    for name, digest in original_hashes.items():
+    expected = {'index.html': '5f02dc402cb95cb001fa82b94f29864493e6948411e4a364af0a93cbfdeb6766', 'style.css': '32b7f8c8b8e0d14a2c00dd886fcceede229bea3761f76f5ead8b3b0352ca4724'}
+    for name,digest in expected.items():
         assert hashlib.sha256((root/'static'/name).read_bytes()).hexdigest()==digest
+    speak=next(line for line in (root/'static/app.js').read_text().splitlines() if line.startswith('function speak(text)'))
+    assert hashlib.sha256(speak.encode()).hexdigest()=='cafd9fc715762259b89d0b546c144af54b55f557edd4fe3175b7112d8363061d'
 
 
 def test_real_backend_inside_desktop_host(tmp_path,monkeypatch):

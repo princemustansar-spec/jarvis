@@ -10,7 +10,7 @@
 8. Files ke liye Settings mein sirf zaroori folders approve karein. Computer Control mein path aur doosri details dein. Sensitive action ko Safety Center mein exact arguments dekh kar Approve ya Deny karein.
 9. Teach AI / Knowledge & Memory mein sirf woh baat save karein jo aap future conversations mein istemal karwana chahte hain. Is se model retrain nahin hota.
 10. Reminders mein title aur future waqt dein. App chal rahi ho to waqt par in-app notification aayegi. Band ho to aglay start par overdue reminder milega.
-11. Voice Assistant mein Start microphone dabayein aur browser permission dein. Browser audio ko apni speech service bhej sakta hai. Transcript review karke Send karein. Mic khud ba-khud background mein nahin chalta.
+11. Voice Assistant mein pehle Install offline model chalayein, Microphone diagnostics aur Test input karein. English ya Roman Urdu select karke Start microphone dabayein. Audio Python mein locally process hota hai; browser speech service use nahin hoti. Stop par transcript banta hai; review/edit karke Send karein. Roman Urdu spelling approximate ho sakti hai.
 12. WhatsApp Center sirf draft kholta hai. Send aap WhatsApp mein khud karein.
 13. Media Studio ke liye image API aur image model zaroori hain. Video editing is version mein available nahin.
 14. Emergency Stop se active AI request aur pending approvals rokein. Pehle ho chuki action ya paid remote request undo nahin hoti. Safety Center se Resume karein.
@@ -22,3 +22,6 @@ RAM monitor asli numbers dikhata hai. “RAM boost” ke naam par apps band nahi
 Desktop shortcut INSTALL.bat banata hai. Dobara banane ke liye CREATE_DESKTOP_SHORTCUT.bat chalayein. WebView2 missing ka error aaye to Microsoft ki website se WebView2 Evergreen Runtime install karein. Browser khol kar app chalana ab zaroori nahin.
 
 Portable EXE ke liye Windows par BUILD_WINDOWS.bat chalayein. dist\NEXUS_AI_ULTRA ka POORA folder doosray PC par copy karein, sirf EXE nahin. Us PC par Python zaroori nahin, lekin WebView2 runtime zaroori hai. Is Linux cloud mein Windows EXE build aur asli window ka test nahin hua.
+
+
+Purani installation par "Microphone: network" ke liye app close karke INSTALL_VOICE.bat chalayein. Model aik dafa Internet se download hota hai; us ke baad recording/STT offline hai. Windows privacy mein "Let desktop apps access your microphone" enable karein. Cancel ya Emergency Stop voice worker rok deta hai. Speaker output pehle wala hi hai. Puri guide docs/OFFLINE_VOICE_GUIDE.md mein hai.

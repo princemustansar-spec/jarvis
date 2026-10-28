@@ -17,7 +17,7 @@ Independent Python Windows desktop assistant hosted in a lightweight pywebview w
 
 Run `BUILD_WINDOWS.bat` after installation. It creates `dist\NEXUS_AI_ULTRA\NEXUS_AI_ULTRA.exe` with PyInstaller. Distribute the **entire** `dist\NEXUS_AI_ULTRA` directory, including `_internal`; users can launch the EXE without installing Python. WebView2 Evergreen Runtime is still required. This is an independent desktop window, not a browser shortcut. The one-folder build avoids repeated one-file unpacking and reuses the OS WebView2 runtime instead of bundling Chromium. No executable has been built or native-rendered in this Linux cloud; Windows acceptance remains pending.
 
-Only intentional web-search/WhatsApp/browser tools or clicked external result links can open a browser, preserving existing button behavior. App startup never calls the default browser, and missing WebView2 produces an error instead of a browser fallback. The HTML, CSS and JavaScript bytes are unchanged. Embedded WebView2 speech-recognition support may differ from Chrome/Edge browser; microphone capabilities must be checked on the PC.
+Only intentional web-search/WhatsApp/browser tools or clicked external result links can open a browser, preserving existing button behavior. App startup never calls the default browser, and missing WebView2 produces an error instead of a browser fallback. The HTML, CSS and JavaScript bytes are unchanged. Microphone recognition now runs in Python independently of WebView2; Windows microphone permissions, drivers and real model quality still need testing.
 
 Optional screenshot support: run `.venv\Scripts\python -m pip install -r requirements-optional.txt` from this folder. Pillow is not needed for other modules.
 
@@ -45,7 +45,7 @@ Use a trusted provider: messages, approved file-tool results and approved long-t
 - File paths constrained to approved folders with resolved-path checks. Text reads limited to 1 MB; listing/search bounded. New files do not overwrite existing files.
 - Single-use five-minute action approvals, per-tool permissions, activity/error log, Emergency Stop and inference cancellation.
 - SQLite chat history, approved memory, reminders and activity. Due reminders notify in the app while running; overdue items are delivered on restart. No Windows service is installed.
-- Browser speech recognition and speech synthesis where supported. Push-to-talk, transcript review before sending, speaker selection excluding Asad/Uzma. Browser recognition may use an external speech service. No continuous listening or wake word by default.
+- Python offline microphone STT using multilingual Whisper tiny CPU INT8, explicit push-to-talk, device/input-level diagnostics, English and approximate Roman Urdu transcripts for review. One-time verified model download is required. Existing speechSynthesis output and voice exclusions remain unchanged. No browser SpeechRecognition or continuous recording.
 - Image generation through a compatible configured `/images/generations` endpoint. Response images or secure result links render in Media Studio.
 - WhatsApp drafts open for manual review and sending; nothing sends automatically.
 
@@ -100,3 +100,7 @@ Desktop conversion details and validation: `docs/DESKTOP_TEST_REPORT.md`.
 ## Automatic laptop/window fitting
 
 The existing JARVIS navy/cyan dashboard automatically responds to usable window width **and height**. The AI core scales inside its panel; dashboard controls fit at 1366×768 and 1920×1080. Settings has a vertical scrollbar, with its bottom save controls reachable. On smaller windows or scaled displays, vertical scrolling preserves readable controls. Resizing does not reload the page or discard unsaved settings. No manual resolution setting is required. See `docs/AUTOFIT_TEST_REPORT.md` for screenshots, checks and Windows verification limits. If using an already-built portable executable, run BUILD_WINDOWS.bat again to package the updated CSS.
+
+## Offline Python microphone update
+
+For the previous "Microphone: network" issue, close the app and run `INSTALL_VOICE.bat`, restart, then open Voice Assistant → Install offline model (~75 MB) → Microphone diagnostics → Test input. Select English or Roman Urdu and record a short clip. The transcript stays editable and is never automatically sent. Roman spelling is approximate. Existing speaker output, dashboard design, providers and tools are preserved. For a portable EXE, rebuild with BUILD_WINDOWS.bat to include the new voice libraries. See `docs/OFFLINE_VOICE_GUIDE.md` and `docs/VOICE_TEST_REPORT.md` for setup, privacy, limitations and actual test evidence.

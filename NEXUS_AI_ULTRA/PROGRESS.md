@@ -56,3 +56,19 @@ Read docs/DESKTOP_TEST_REPORT.md for evidence and Windows acceptance steps. The 
 - [x] 33 Python tests and both browser suites passed
 
 The stylesheet intentionally supersedes the earlier desktop-conversion CSS hash baseline. Read docs/AUTOFIT_TEST_REPORT.md for current layout evidence.
+
+
+## Python offline microphone replacement — 28 October 2026
+
+- [x] Removed WebView2/browser SpeechRecognition; Python push-to-talk capture
+- [x] CPU INT8 tiny multilingual STT configuration, lazy short-lived worker, in-memory audio only
+- [x] English / Urdu plus offline approximate Latin transliteration, editable transcript, no auto-send
+- [x] Input device diagnostics, explicit 3-second level test, Stop/Cancel/Emergency Stop
+- [x] Verified model setup/checksums, missing-component/device/model error handling
+- [x] Existing GUI HTML/CSS and exact speaker output function preserved
+- [x] Windows installer/build dependencies and freeze support updated
+- [x] 55 Python tests and browser voice/API, functional and auto-fit suites passed
+- [ ] Actual Windows microphone and portable EXE run
+- [ ] Real offline model transcription accuracy/latency/RAM (cloud model host access denied)
+
+Use docs/OFFLINE_VOICE_GUIDE.md and docs/VOICE_TEST_REPORT.md. Earlier browser-microphone instructions are historical and superseded; do not claim live speech recognition passed from fixture tests.
