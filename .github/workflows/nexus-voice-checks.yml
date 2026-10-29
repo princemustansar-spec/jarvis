@@ -1,0 +1,53 @@
+name: NEXUS voice checks
+on:
+  push:
+    branches: [feature/jarvis-voice-upgrade]
+  pull_request:
+    paths: ['NEXUS_AI_ULTRA/**', '.github/workflows/nexus-voice-checks.yml']
+permissions:
+  contents: read
+jobs:
+  windows-contracts:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: NEXUS_AI_ULTRA
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: 'NEXUS_AI_ULTRA/requirements*.txt'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - run: python -m compileall -q nexus run.py
+      - name: Python tests
+        shell: pwsh
+        run: |
+          $output = & python -m pytest -q --tb=short 2>&1
+          $code = $LASTEXITCODE
+          $output | ForEach-Object { Write-Output $_ }
+          if ($code -ne 0) {
+            $output | Where-Object { "$_" -match '^FAILED |^E\s|^tests[\/].*:' } | Select-Object -First 30 | ForEach-Object {
+              $message = "$_".Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+              Write-Output "::error::$message"
+            }
+            exit $code
+          }
+      - name: Parse safe updater (does not install or record)
+        shell: pwsh
+        run: |
+          $tokens = $null; $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path install_update.ps1),[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; exit 1 }
+      - name: Rollback preserves latest data (process detection mocked)
+        shell: pwsh
+        run: ./tests/updater_rollback.ps1
+      - name: Real disposable Windows update and rollback
+        shell: pwsh
+        run: ./tests/windows_updater_smoke.ps1
+      - name: Windows SAPI and online service diagnostics (no microphone)
+        run: python tests/windows_voice_probe.py

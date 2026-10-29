@@ -21,6 +21,7 @@ store = Store(DATA / 'nexus.sqlite3')
 providers = Providers(store)
 tools = Tools(store)
 voice = VoiceService(DATA)
+tts = VoiceService(DATA)
 session_token = secrets.token_urlsafe(32)
 pending = {}
 active = set()
@@ -43,6 +44,7 @@ async def lifespan(app):
     probes = [asyncio.create_task(providers.probe(p['id'])) for p in providers.configs() if p['enabled']]
     yield
     await asyncio.to_thread(voice.cancel)
+    await asyncio.to_thread(tts.cancel)
     task.cancel()
     for probe in probes: probe.cancel()
     await asyncio.gather(task, *probes, return_exceptions=True)
@@ -93,7 +95,8 @@ def state():
                 roots=tools.roots(),
                 chat=list(reversed(store.list('chat', 100))), memory=store.list('memory'), reminders=store.list('reminder'),
                 activity=store.list('activity',50), notifications=store.list('notification',50), preferred_provider=store.get('preferred_provider',''),
-                voice=voice.status(), voice_settings=store.get('voice_settings', {'device': None, 'language': 'en', 'seconds': 10}))
+                voice=voice.status(), tts=tts.status(), voice_muted=store.get('voice_muted',False),
+                voice_settings={**{'device':None,'language':'ur','seconds':8,'engine':'google','locale':'en-IN','silence_timeout':.8,'start_timeout':5},**store.get('voice_settings',{})})
 
 @app.post('/api/settings')
 async def settings(request: Request):
@@ -158,6 +161,7 @@ async def safety(request: Request):
     emergency = bool(b.get('stop',emergency))
     if emergency:
         await asyncio.to_thread(voice.cancel)
+        await asyncio.to_thread(tts.cancel)
         pending.clear()
         for task in tuple(active): task.cancel()
     if 'denied_tools' in b: store.set('denied_tools', [n for n in b['denied_tools'] if n in CATALOG])
@@ -245,7 +249,12 @@ async def voice_start(request: Request):
     b = await request.json()
     if emergency: raise ValueError('Emergency Stop active')
     if b.get('consent') is not True: raise ValueError('Explicit microphone consent is required.')
-    settings = {'device': b.get('device'), 'language': b.get('language', 'en'), 'seconds': b.get('seconds', 10)}
+    if store.get('voice_muted',False): raise ValueError('Voice is muted. Unmute in Voice Assistant.')
+    if b.get('engine') == 'google' and b.get('online_consent') is not True: raise ValueError('Consent to send this audio clip to Google is required.')
+    await asyncio.to_thread(tts.cancel)
+    settings = {'device':b.get('device'),'language':b.get('language','en'),'seconds':b.get('seconds',10),
+                'engine':b.get('engine','offline'),'locale':b.get('locale','en-IN'),
+                'silence_timeout':b.get('silence_timeout'),'start_timeout':b.get('start_timeout',5)}
     result = await asyncio.to_thread(voice.start, 'capture', **settings)
     store.set('voice_settings', settings)
     return result
@@ -258,6 +267,7 @@ async def voice_diagnostics():
 async def voice_test(request: Request):
     b = await request.json()
     if emergency: raise ValueError('Emergency Stop active')
+    if store.get('voice_muted',False): raise ValueError('Voice is muted.')
     if b.get('consent') is not True: raise ValueError('Explicit microphone consent is required.')
     return await asyncio.to_thread(voice.start, 'test', device=b.get('device'), seconds=3)
 
@@ -275,3 +285,29 @@ async def voice_stop():
 @app.post('/api/voice/cancel')
 async def voice_cancel():
     return await asyncio.to_thread(voice.cancel)
+
+
+@app.post('/api/tts/speak')
+async def tts_speak(request: Request):
+    b=await request.json()
+    if emergency or store.get('voice_muted',False): raise ValueError('Voice is muted or Emergency Stop is active.')
+    await asyncio.to_thread(tts.cancel)
+    return await asyncio.to_thread(tts.start,'tts',text=b.get('text',''),allow_online=b.get('allow_online') is True,preferred_voice=b.get('preferred_voice',''))
+
+@app.get('/api/tts/status')
+def tts_status():
+    return tts.status()
+
+@app.post('/api/tts/stop')
+async def tts_stop():
+    return await asyncio.to_thread(tts.cancel)
+
+@app.post('/api/voice/mute')
+async def voice_mute(request: Request):
+    b=await request.json()
+    if type(b.get('muted')) is not bool: raise ValueError('muted must be true or false')
+    store.set('voice_muted',b['muted'])
+    if b['muted']:
+        await asyncio.to_thread(voice.cancel)
+        await asyncio.to_thread(tts.cancel)
+    return {'muted':b['muted']}

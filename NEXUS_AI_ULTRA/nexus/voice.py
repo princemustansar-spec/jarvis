@@ -15,7 +15,8 @@ import uuid
 MODEL_REPO = 'Systran/faster-whisper-tiny'  # Multilingual: never tiny.en.
 MODEL_NAME = 'tiny'
 MAX_SECONDS = 15
-VOICE_PACKAGES = ('sounddevice', 'faster_whisper', 'uroman')
+VOICE_PACKAGES = ('sounddevice', 'faster_whisper', 'uroman', 'speech_recognition')
+_WHISPER_CACHE = {}
 
 
 def model_manifest(directory, verify=False):
@@ -104,7 +105,7 @@ def enumerate_inputs(sd):
             'guidance': 'Windows Settings > Privacy & security > Microphone: enable microphone access and Let desktop apps access your microphone. Enumeration alone does not prove permission.'}
 
 
-def record_audio(sd, device, seconds, stop_event, send):
+def record_audio(sd, device, seconds, stop_event, send, silence_timeout=None, start_timeout=5):
     import numpy as np
     info = sd.query_devices(device, 'input')
     rate = int(info['default_samplerate'])
@@ -112,14 +113,42 @@ def record_audio(sd, device, seconds, stop_event, send):
         raise ValueError('Microphone reports an unsupported sample rate. Select another input device.')
     sd.check_input_settings(device=device, channels=1, samplerate=rate, dtype='float32')
     chunks, frames, overflows = [], 0, 0
-    target = int(rate * seconds)
+    target = int(rate * (seconds + start_timeout + .5)) if silence_timeout else int(rate * seconds)
+    noise, threshold, speech_start, last_speech = [], .004, None, 0
+    from collections import deque
+    preroll = deque(maxlen=max(1, int(rate * .2 / 1024)))
     with sd.InputStream(device=device, samplerate=rate, channels=1, dtype='float32', blocksize=1024) as stream:
-        send({'phase': 'listening', 'message': 'Listening locally. Press Stop to transcribe, or Cancel to discard.'})
+        send({'phase': 'calibrating' if silence_timeout else 'listening', 'message': 'Keep quiet for 0.5 seconds while ambient noise is measured.' if silence_timeout else 'Listening locally. Press Stop to transcribe, or Cancel to discard.'})
         last_meter = 0
         while frames < target and not stop_event.is_set():
             data, overflow = stream.read(min(1024, target - frames))
-            chunks.append(data.copy())
             frames += len(data)
+            elapsed = frames / rate
+            block_rms = float(np.sqrt(np.mean(np.square(data)))) if data.size else 0
+            if silence_timeout:
+                if elapsed <= .5:
+                    noise.append(block_rms)
+                    continue
+                if noise:
+                    threshold = max(.004, float(np.median(noise)) * 2.5)
+                    noise.clear()
+                    send({'phase':'listening','message':'Speak now. Recording ends automatically after silence.'})
+                if speech_start is None:
+                    preroll.append(data.copy())
+                    if block_rms > threshold:
+                        speech_start = elapsed
+                        last_speech = elapsed
+                        chunks.extend(preroll)
+                    elif elapsed >= .5 + start_timeout:
+                        raise ValueError('No speech detected before the start timeout. Check input level and try again.')
+                else:
+                    chunks.append(data.copy())
+                    if block_rms > threshold:
+                        last_speech = elapsed
+                    if elapsed - last_speech >= silence_timeout or elapsed - speech_start >= seconds:
+                        break
+            else:
+                chunks.append(data.copy())
             overflows += int(bool(overflow))
             now = time.monotonic()
             if now - last_meter >= .25:
@@ -159,8 +188,12 @@ def transcribe_audio(audio, rate, directory, language, send):
         resampler = av.AudioResampler(format='fltp', layout='mono', rate=16000)
         frames = resampler.resample(frame) + resampler.resample(None)
         audio = np.concatenate([f.to_ndarray().reshape(-1) for f in frames])
-    model = WhisperModel(str(directory), device='cpu', compute_type='int8',
-                         cpu_threads=max(1, min(2, os.cpu_count() or 1)), num_workers=1, local_files_only=True)
+    cache_key = str(directory)
+    model = _WHISPER_CACHE.get(cache_key)
+    if model is None:
+        model = WhisperModel(cache_key, device='cpu', compute_type='int8',
+                             cpu_threads=max(1, min(2, os.cpu_count() or 1)), num_workers=1, local_files_only=True)
+        _WHISPER_CACHE[cache_key] = model
     segments, info = model.transcribe(audio, language=None if language == 'auto' else language,
                                       beam_size=1, best_of=1, temperature=0, vad_filter=True,
                                       condition_on_previous_text=False, without_timestamps=True)
@@ -173,7 +206,7 @@ def transcribe_audio(audio, rate, directory, language, send):
             'notice': 'Review before sending. Urdu-to-Latin spelling is approximate; short/noisy clips and code-switching can be inaccurate.'}
 
 
-def voice_worker(connection, stop_event, operation, options, directory):
+def voice_worker(connection, stop_event, operation, options, directory, keep_open=False):
     """Spawn target: no network code is called for recording/transcription."""
     def send(message):
         connection.send(message)
@@ -181,20 +214,36 @@ def voice_worker(connection, stop_event, operation, options, directory):
         os.environ.setdefault('HF_HUB_DISABLE_TELEMETRY', '1')
         if operation == 'model':
             result = install_model(directory, send)
+        elif operation == 'tts':
+            from .tts import speak_reply
+            result = speak_reply(options['text'], options.get('allow_online', False), stop_event, send, options.get('preferred_voice',''))
         else:
             import sounddevice as sd
             if operation == 'diagnostics':
                 result = enumerate_inputs(sd)
             else:
-                if operation == 'capture' and not model_manifest(directory, verify=True):
+                if operation == 'capture' and options.get('engine', 'offline') == 'offline' and not model_manifest(directory, verify=True):
                     raise ValueError('Verified offline model not installed. Run Install offline model in Voice Assistant first.')
-                audio, rate, metrics = record_audio(sd, options['device'], options['seconds'], stop_event, send)
+                audio, rate, metrics = record_audio(sd, options['device'], options['seconds'], stop_event, send,
+                    options.get('silence_timeout') if operation == 'capture' else None, options.get('start_timeout', 5))
                 if operation == 'test':
                     result = {**metrics, 'guidance': 'No input signal: check mute, input selection and Windows microphone privacy.' if metrics['silence'] else 'Input signal detected. Clipping/overflows may require reducing gain or selecting another device.'}
                 else:
                     if metrics['silence']:
                         raise ValueError('No microphone signal detected. Run Microphone diagnostics and Test input; check mute, device and Windows privacy settings.')
-                    result = {**transcribe_audio(audio, rate, directory, options['language'], send), 'diagnostics': metrics}
+                    if options.get('engine', 'offline') == 'google':
+                        from .voice_online import google_transcribe
+                        try:
+                            result = google_transcribe(audio, rate, options.get('locale','en-IN'), options['language']!='en', send)
+                        except Exception as exc:
+                            if not model_manifest(directory, verify=True):
+                                raise ValueError('Google recognition failed ('+type(exc).__name__+'). Offline fallback model is not installed. Check connectivity/language or install the tiny model.') from exc
+                            send({'phase':'transcribing','message':'Google unavailable/unintelligible; using verified offline fallback.'})
+                            result = transcribe_audio(audio, rate, directory, options['language'], send)
+                            result['fallback_reason'] = type(exc).__name__
+                    else:
+                        result = transcribe_audio(audio, rate, directory, options['language'], send)
+                    result['diagnostics'] = metrics
         send({'phase': 'done', 'result': result})
     except Exception as exc:
         if isinstance(exc, ImportError) or (isinstance(exc, OSError) and 'portaudio' in str(exc).lower()):
@@ -207,7 +256,23 @@ def voice_worker(connection, stop_event, operation, options, directory):
             message = str(exc)[:450]
         send({'phase': 'error', 'error': message, 'error_type': type(exc).__name__})
     finally:
+        if not keep_open:
+            connection.close()
+
+
+def reusable_voice_worker(connection, stop_event, commands, operation, options, directory):
+    """Keep only a recently used capture/model worker warm; microphone stays closed."""
+    try:
+        while True:
+            voice_worker(connection, stop_event, operation, options, directory, keep_open=True)
+            if not commands.poll(45):
+                break
+            operation, options = commands.recv()
+    except (EOFError, OSError):
+        pass
+    finally:
         connection.close()
+        commands.close()
 
 
 class VoiceService:
@@ -216,6 +281,7 @@ class VoiceService:
         self.context = context or multiprocessing.get_context('spawn')
         self.lock = threading.RLock()
         self.process = self.connection = self.stop_event = None
+        self.commands = None
         self.started = 0
         self.state = {'phase': 'idle', 'job_id': None}
 
@@ -253,10 +319,16 @@ class VoiceService:
         if self.connection:
             self.connection.close()
             self.connection = None
+        if self.commands:
+            self.commands.close()
+            self.commands = None
         self.stop_event = None
 
     def _stop_process(self):
         if self.process:
+            if self.state.get('operation') == 'tts' and self.stop_event:
+                self.stop_event.set()
+                self.process.join(timeout=.5)
             if self.process.is_alive():
                 self.process.terminate()
                 self.process.join(timeout=1)
@@ -278,8 +350,8 @@ class VoiceService:
                     'model_ready': model_manifest(self.directory) is not None,
                     'model_directory': str(self.directory), 'offline_recognition': True, 'max_seconds': MAX_SECONDS}
 
-    def start(self, operation, *, device=None, language='en', seconds=10):
-        if operation not in ('capture', 'diagnostics', 'test', 'model'):
+    def start(self, operation, *, device=None, language='en', seconds=10, engine='offline', locale='en-IN', silence_timeout=None, start_timeout=5, text='', allow_online=False, preferred_voice=''):
+        if operation not in ('capture', 'diagnostics', 'test', 'model', 'tts'):
             raise ValueError('Unsupported voice operation')
         if language not in ('en', 'ur', 'auto'):
             raise ValueError('Select English, Roman Urdu or automatic language.')
@@ -287,8 +359,29 @@ class VoiceService:
             raise ValueError('Microphone device must be a nonnegative device ID or system default.')
         if type(seconds) not in (int, float) or not math.isfinite(seconds) or not 2 <= seconds <= MAX_SECONDS:
             raise ValueError('Recording duration must be 2–15 seconds.')
+        if engine not in ('google', 'offline') or locale not in ('en-IN','ur-PK','hi-IN','en-US','en-GB'):
+            raise ValueError('Unsupported recognition engine or language locale.')
+        if silence_timeout is not None and (type(silence_timeout) not in (int,float) or not .4 <= silence_timeout <= 3):
+            raise ValueError('Silence timeout must be 0.4–3 seconds.')
+        if type(start_timeout) not in (int,float) or not 2 <= start_timeout <= 15:
+            raise ValueError('Speech start timeout must be 2–15 seconds.')
+        if operation == 'tts' and (not isinstance(text,str) or not text.strip() or len(text)>1800):
+            raise ValueError('Spoken reply must contain 1–1800 characters.')
+        if not isinstance(preferred_voice,str) or len(preferred_voice)>150 or re.search('asad|uzma',preferred_voice,re.I):
+            raise ValueError('Choose a voice other than Asad/Uzma.')
+        options = {'device':device,'language':language,'seconds':seconds,'engine':engine,'locale':locale,
+                   'silence_timeout':silence_timeout,'start_timeout':start_timeout,'text':text,'allow_online':allow_online,'preferred_voice':preferred_voice}
         with self.lock:
             self._collect()
+            if self.process and self.commands and operation == 'capture' and self.state.get('operation') == 'capture' and self.state['phase'] in ('done','error'):
+                try:
+                    self.stop_event.clear()
+                    self.commands.send((operation,options))
+                    self.started = time.monotonic()
+                    self.state = {'job_id':uuid.uuid4().hex,'operation':operation,'phase':'starting','message':'Reusing recent voice worker; microphone opens only for this request.'}
+                    return dict(self.state)
+                except (BrokenPipeError,EOFError,OSError):
+                    self._stop_process()
             if self.process:
                 if self.state['phase'] in ('done', 'error', 'cancelled'):
                     self._stop_process()
@@ -296,14 +389,21 @@ class VoiceService:
                     raise ValueError('Another voice operation is running. Stop or cancel it first.')
             receiver, sender = self.context.Pipe(duplex=False)
             event = self.context.Event()
-            process = self.context.Process(target=voice_worker, args=(sender, event, operation,
-                       {'device': device, 'language': language, 'seconds': seconds}, str(self.directory)), daemon=True)
+            command_receiver, command_sender = self.context.Pipe(duplex=False)
+            target = reusable_voice_worker if operation == 'capture' else voice_worker
+            args = (sender,event,command_receiver,operation,options,str(self.directory)) if operation == 'capture' else (sender,event,operation,options,str(self.directory))
+            process = self.context.Process(target=target, args=args, daemon=True)
             try:
                 process.start()
             except Exception:
-                receiver.close(); sender.close()
+                receiver.close(); sender.close(); command_receiver.close(); command_sender.close()
                 raise
             sender.close()
+            command_receiver.close()
+            if operation == 'capture':
+                self.commands = command_sender
+            else:
+                command_sender.close()
             self.process, self.connection, self.stop_event = process, receiver, event
             self.started = time.monotonic()
             self.state = {'job_id': uuid.uuid4().hex, 'operation': operation, 'phase': 'starting', 'message': 'Starting local Python voice worker.'}

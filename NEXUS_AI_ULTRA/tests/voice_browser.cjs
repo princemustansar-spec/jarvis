@@ -17,10 +17,11 @@ await page.route('**/api/voice/status',async route=>{
  return respond(route,{job_id:'voice-fixture',phase:'done',model_ready:true,result:{text:'Mera CPU check karo.',original_text:'میرا سی پی یو چیک کرو',romanized:true,offline:true}});
 });
 await page.goto('http://127.0.0.1:8765');await page.waitForFunction(()=>document.querySelector('#cpu').textContent!=='—');
+await page.evaluate(()=>renderVoiceStatus({phase:'calibrating',model_ready:false}));assert.equal(await page.locator('#mic-button').textContent(),'Stop & transcribe');
 const chatBefore=await page.evaluate(()=>state.chat.length);
 await page.locator('[data-page="Voice Assistant"]').click();await page.locator('#voice-language').selectOption('ur');
 await page.locator('#voice-record-button').click();await page.waitForFunction(()=>document.querySelector('#voice-record-button').textContent==='Stop & transcribe');
-assert.equal(payload.language,'ur');assert.equal(payload.consent,true);
+assert.equal(payload.language,'ur');assert.equal(payload.consent,true);assert.equal(payload.engine,'google');assert.equal(payload.locale,'en-IN');assert.equal(payload.online_consent,true);
 // Simulate reloading while the Python worker is still recording.
 let injectResume=true;
 await page.route('**/api/state',async route=>{const response=await route.fetch();const data=await response.json();if(injectResume){data.voice={phase:'listening',job_id:'voice-fixture',operation:'capture',model_ready:true};injectResume=false;}await respond(route,data);});

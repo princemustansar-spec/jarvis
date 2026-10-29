@@ -1,0 +1,4 @@
+{
+  "google_en_IN_probe": "RequestError from actual HTTPS attempt; no real microphone available",
+  "edge_probe": "ClientConnectorDNSError; cloud service access unavailable"
+}

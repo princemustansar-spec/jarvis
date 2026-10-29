@@ -72,3 +72,15 @@ The stylesheet intentionally supersedes the earlier desktop-conversion CSS hash 
 - [ ] Real offline model transcription accuracy/latency/RAM (cloud model host access denied)
 
 Use docs/OFFLINE_VOICE_GUIDE.md and docs/VOICE_TEST_REPORT.md. Earlier browser-microphone instructions are historical and superseded; do not claim live speech recognition passed from fixture tests.
+
+## JARVIS-style voice feature branch — 29 October 2026
+
+- [x] Actual JARVIS microphone/TTS source inspected at 45648afc5b4593093d0b20a5562da2f60a25eb3b
+- [x] Python Google en-IN primary, configurable locales, automatic silence detection
+- [x] Existing offline same-audio fallback, 45-second warm-worker/model reuse
+- [x] Opt-in Edge Prabhat output, allowed Windows fallback, Stop/Mute
+- [x] Safe PowerShell backup/update/rollback; parser and rollback filesystem test
+- [x] 67 Linux Python tests plus existing browser suites
+- [ ] Actual Windows microphone/accuracy/latency/output acceptance
+- [ ] Full Windows installer and low-RAM hardware acceptance
+- [ ] PR creation/merge if authenticated GitHub API access is available (native Git access alone is insufficient)
