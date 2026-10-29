@@ -23,21 +23,21 @@ def main():
             result['windows_sapi']={'initialized':True,'allowed_voice_count':len(voices)}
             with tempfile.TemporaryDirectory(prefix='nexus-sapi-probe-') as folder:
                 audio=Path(folder)/'synthetic.wav'
-                # pyttsx3's async file-save returned an empty WAV on this runner.
-                # Use the same System.Speech/SAPI family as JARVIS's Windows fallback,
-                # synchronously, to ensure the network probe actually has speech.
-                import clr
-                clr.AddReference('System.Speech')
-                from System.Speech.Synthesis import SpeechSynthesizer
-                synth=SpeechSynthesizer()
+                # Render through SAPI synchronously: pyttsx3's async file helper
+                # closed its WAV early, and this runner lacks System.Speech.dll.
+                from comtypes.client import CreateObject
+                speaker=CreateObject('SAPI.SpVoice')
+                tokens=speaker.GetVoices()
+                allowed=[tokens.Item(i) for i in range(tokens.Count) if not re.search('asad|uzma',tokens.Item(i).GetDescription(),re.I)]
+                if not allowed:raise RuntimeError('No allowed SAPI voice')
+                speaker.Voice=allowed[0]
+                stream=CreateObject('SAPI.SpFileStream')
+                stream.Open(str(audio),3)
                 try:
-                    allowed=[v.VoiceInfo.Name for v in synth.GetInstalledVoices() if v.Enabled and not re.search('asad|uzma',v.VoiceInfo.Name,re.I)]
-                    if not allowed:raise RuntimeError('No allowed System.Speech voice')
-                    synth.SelectVoice(allowed[0])
-                    synth.SetOutputToWaveFile(str(audio))
-                    synth.Speak('Hello Nexus, please check the processor and memory usage on my computer.')
-                finally:synth.Dispose()
-                result['synthesis_backend']='System.Speech/SAPI synchronous file output'
+                    speaker.AudioOutputStream=stream
+                    speaker.Speak('Hello Nexus, please check the processor and memory usage on my computer.',0)
+                finally:stream.Close()
+                result['synthesis_backend']='SAPI synchronous file output'
                 result['sapi_file_synthesis']=audio.is_file() and audio.stat().st_size>44
                 if result['sapi_file_synthesis']:
                     recognizer=sr.Recognizer();recognizer.operation_timeout=6
@@ -52,7 +52,9 @@ def main():
                         result['google_en_IN_synthetic']={'status':'response','text':text}
                     except Exception as exc:result['google_en_IN_synthetic']={'status':'unavailable','error_type':type(exc).__name__}
         finally:engine.stop()
-    except Exception as exc:result['windows_sapi']={'initialized':False,'error_type':type(exc).__name__}
+    except Exception as exc:
+        result.setdefault('windows_sapi',{'initialized':False})
+        result['sapi_probe_error']=type(exc).__name__
     try:
         from nexus.tts import edge_audio
         data=asyncio.run(edge_audio('NEXUS voice connection test.'))
