@@ -1,0 +1,21 @@
+"""JARVIS V6.7-compatible Google recognizer using NEXUS's existing PCM capture."""
+
+def google_transcribe(audio, rate, locale, roman_output, send):
+    import numpy as np
+    import speech_recognition as sr
+    from .voice import romanize
+    recognizer = sr.Recognizer()
+    recognizer.operation_timeout = 6
+    pcm = (np.clip(audio, -1, 1) * 32767).astype('<i2').tobytes()
+    send({'phase':'transcribing','message':'Google Speech Recognition: '+locale+'. Audio is sent online; local fallback is available.'})
+    audio_data = sr.AudioData(pcm,rate,2)
+    if rate != 16000:
+        audio_data = sr.AudioData(audio_data.get_raw_data(convert_rate=16000,convert_width=2),16000,2)
+    text = recognizer.recognize_google(audio_data, language=locale,
+                endpoint='https://www.google.com/speech-api/v2/recognize')
+    if not text.strip():
+        raise sr.UnknownValueError()
+    converted = romanize(text) if roman_output else text
+    return {'text':converted,'original_text':text,'romanized':converted!=text,'offline':False,
+            'engine':'google','detected_language':locale,'model':'Google Speech Recognition',
+            'notice':'Review before Send. en-IN accuracy for Roman Urdu/mixed speech must be measured on your microphone.'}

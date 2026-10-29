@@ -1,0 +1,36 @@
+name: NEXUS voice checks
+on:
+  push:
+    branches: [feature/jarvis-voice-upgrade]
+  pull_request:
+    paths: ['NEXUS_AI_ULTRA/**', '.github/workflows/nexus-voice-checks.yml']
+permissions:
+  contents: read
+jobs:
+  windows-contracts:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: NEXUS_AI_ULTRA
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+          cache: pip
+          cache-dependency-path: 'NEXUS_AI_ULTRA/requirements*.txt'
+      - run: python -m pip install -r requirements.txt
+      - run: python -m pip check
+      - run: python -m compileall -q nexus run.py
+      - run: python -m pytest -q
+      - name: Parse safe updater (does not install or record)
+        shell: pwsh
+        run: |
+          $tokens = $null; $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path install_update.ps1),[ref]$tokens,[ref]$errors) | Out-Null
+          if ($errors.Count) { $errors | Format-List; exit 1 }
+      - name: Rollback preserves latest data (process detection mocked)
+        shell: pwsh
+        run: ./tests/updater_rollback.ps1

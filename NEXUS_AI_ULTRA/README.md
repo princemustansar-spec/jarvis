@@ -104,3 +104,7 @@ The existing JARVIS navy/cyan dashboard automatically responds to usable window 
 ## Offline Python microphone update
 
 For the previous "Microphone: network" issue, close the app and run `INSTALL_VOICE.bat`, restart, then open Voice Assistant → Install offline model (~75 MB) → Microphone diagnostics → Test input. Select English or Roman Urdu and record a short clip. The transcript stays editable and is never automatically sent. Roman spelling is approximate. Existing speaker output, dashboard design, providers and tools are preserved. For a portable EXE, rebuild with BUILD_WINDOWS.bat to include the new voice libraries. See `docs/OFFLINE_VOICE_GUIDE.md` and `docs/VOICE_TEST_REPORT.md` for setup, privacy, limitations and actual test evidence.
+
+## JARVIS-style primary online voice (feature upgrade)
+
+Google SpeechRecognition with configurable `en-IN` default is now primary in the Voice Assistant UI, with the existing verified offline tiny model as fallback. Python capture calibrates noise and ends after configurable silence. Edge `en-IN-PrabhatNeural` output is opt-in, with allowed Windows voices as fallback; Asad/Uzma are excluded. No always-on microphone is enabled. The safe `install_update.ps1` backs up existing source/.venv, preserves user data, and supports rollback. Read **docs/JARVIS_VOICE_UPGRADE.md**; it supersedes the older offline-primary instructions and distinguishes actual tests from pending Windows microphone acceptance.
