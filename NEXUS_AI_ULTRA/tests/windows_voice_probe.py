@@ -23,7 +23,21 @@ def main():
             result['windows_sapi']={'initialized':True,'allowed_voice_count':len(voices)}
             with tempfile.TemporaryDirectory(prefix='nexus-sapi-probe-') as folder:
                 audio=Path(folder)/'synthetic.wav'
-                engine.save_to_file('Hello Nexus, please check the processor and memory usage on my computer.',str(audio));engine.runAndWait()
+                # pyttsx3's async file-save returned an empty WAV on this runner.
+                # Use the same System.Speech/SAPI family as JARVIS's Windows fallback,
+                # synchronously, to ensure the network probe actually has speech.
+                import clr
+                clr.AddReference('System.Speech')
+                from System.Speech.Synthesis import SpeechSynthesizer
+                synth=SpeechSynthesizer()
+                try:
+                    allowed=[v.VoiceInfo.Name for v in synth.GetInstalledVoices() if v.Enabled and not re.search('asad|uzma',v.VoiceInfo.Name,re.I)]
+                    if not allowed:raise RuntimeError('No allowed System.Speech voice')
+                    synth.SelectVoice(allowed[0])
+                    synth.SetOutputToWaveFile(str(audio))
+                    synth.Speak('Hello Nexus, please check the processor and memory usage on my computer.')
+                finally:synth.Dispose()
+                result['synthesis_backend']='System.Speech/SAPI synchronous file output'
                 result['sapi_file_synthesis']=audio.is_file() and audio.stat().st_size>44
                 if result['sapi_file_synthesis']:
                     recognizer=sr.Recognizer();recognizer.operation_timeout=6
@@ -31,6 +45,7 @@ def main():
                     import audioop
                     raw=clip.get_raw_data(convert_rate=16000,convert_width=2)
                     result['synthetic_signal']={'duration_seconds':round(len(raw)/32000,2),'rms_pcm16':audioop.rms(raw,2)}
+                    result['sapi_file_synthesis']=len(raw)>16000 and audioop.rms(raw,2)>0
                     normalized=sr.AudioData(raw,16000,2)
                     try:
                         text=recognizer.recognize_google(normalized,language='en-IN',endpoint='https://www.google.com/speech-api/v2/recognize')
