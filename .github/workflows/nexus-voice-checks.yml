@@ -46,3 +46,6 @@ jobs:
       - name: Rollback preserves latest data (process detection mocked)
         shell: pwsh
         run: ./tests/updater_rollback.ps1
+      - name: Real disposable Windows update and rollback
+        shell: pwsh
+        run: ./tests/windows_updater_smoke.ps1
