@@ -1,0 +1,8 @@
+
+# Private updater backups and local launch/runtime artifacts
+*.backup-*/
+*.before-rollback-*/
+*.failed-*/
+*.rollback-incomplete-*/
+.nexus-update-backup.json
+*.lnk

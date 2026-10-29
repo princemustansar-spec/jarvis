@@ -1,0 +1,6 @@
+# Keep design checksum fixtures and source identical across Windows/Linux checkouts.
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
