@@ -73,7 +73,7 @@ async function speak(text){
  }catch(e){error(e);}
 }
 function renderVoiceStatus(status){
- if(!status)return;listening=status.phase==='listening';
+ if(!status)return;listening=['calibrating','listening'].includes(status.phase);
  const active=!['idle','done','error','cancelled'].includes(status.phase);
  const label=active?(listening?'Stop & transcribe':'Cancel voice'):'Start microphone';
  $('#mic-button').textContent=active?label:'♩ Voice';const record=$('#voice-record-button');if(record)record.textContent=label;
