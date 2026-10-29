@@ -116,15 +116,15 @@ def test_gui_design_and_voice_output_preserved():
     expected = {'index.html': '5f02dc402cb95cb001fa82b94f29864493e6948411e4a364af0a93cbfdeb6766', 'style.css': '32b7f8c8b8e0d14a2c00dd886fcceede229bea3761f76f5ead8b3b0352ca4724'}
     for name,digest in expected.items():
         assert hashlib.sha256((root/'static'/name).read_bytes()).hexdigest()==digest
-    speak=next(line for line in (root/'static/app.js').read_text().splitlines() if line.startswith('function browserSpeak(text)'))
+    speak=next(line for line in (root/'static/app.js').read_text(encoding='utf-8').splitlines() if line.startswith('function browserSpeak(text)'))
     assert hashlib.sha256(speak.replace('function browserSpeak','function speak').encode()).hexdigest()=='cafd9fc715762259b89d0b546c144af54b55f557edd4fe3175b7112d8363061d'
 
 
 def test_real_backend_inside_desktop_host(tmp_path,monkeypatch):
     import importlib
     import httpx
-    import nexus.app
     monkeypatch.setenv('NEXUS_DATA_DIR',str(tmp_path))
+    import nexus.app
     importlib.reload(nexus.app)
     b=LocalBackend(tmp_path,port=0)
     checked=[]

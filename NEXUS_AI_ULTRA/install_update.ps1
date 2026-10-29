@@ -56,7 +56,7 @@ if ($Rollback) {
     if (-not $BackupPath) { throw 'Supply -BackupPath from the successful update receipt.' }
     $BackupPath = [IO.Path]::GetFullPath($BackupPath)
     if ((Split-Path -Parent $BackupPath) -ne $parent -or -not (Test-Path (Join-Path $BackupPath '.nexus-update-backup.json'))) { throw 'Not a recognized sibling NEXUS backup.' }
-    $receipt = Get-Content (Join-Path $BackupPath '.nexus-update-backup.json') -Raw | ConvertFrom-Json
+    $receipt = Get-Content (Join-Path $BackupPath '.nexus-update-backup.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     if ($receipt.destination -ne $Destination) { throw 'Backup belongs to a different installation.' }
     $saved = $Destination + '.before-rollback-' + [Guid]::NewGuid().ToString('N')
     if (Test-Path $Destination) { Move-Item -LiteralPath $Destination -Destination $saved }
@@ -155,7 +155,7 @@ try {
         Move-Item -LiteralPath $Destination -Destination $failed
         & robocopy $backup $Destination /E /COPY:DAT /DCOPY:DAT /XJ /R:1 /W:1 /NFL /NDL /NP | Out-Null
         if ($LASTEXITCODE -ge 8) { throw "Update failed and automatic restore failed. Complete backup is at $backup; changed folder at $failed." }
-        $receipt = Get-Content (Join-Path $backup '.nexus-update-backup.json') -Raw | ConvertFrom-Json
+        $receipt = Get-Content (Join-Path $backup '.nexus-update-backup.json') -Raw -Encoding UTF8 | ConvertFrom-Json
         Preserve-CurrentData $failed $Destination $receipt.managed
         Write-Warning "Original installation restored. Failed update retained at $failed."
     }
