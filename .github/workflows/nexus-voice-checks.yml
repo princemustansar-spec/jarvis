@@ -49,3 +49,5 @@ jobs:
       - name: Real disposable Windows update and rollback
         shell: pwsh
         run: ./tests/windows_updater_smoke.ps1
+      - name: Windows SAPI and online service diagnostics (no microphone)
+        run: python tests/windows_voice_probe.py
