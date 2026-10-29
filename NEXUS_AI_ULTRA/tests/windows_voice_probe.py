@@ -23,13 +23,17 @@ def main():
             result['windows_sapi']={'initialized':True,'allowed_voice_count':len(voices)}
             with tempfile.TemporaryDirectory(prefix='nexus-sapi-probe-') as folder:
                 audio=Path(folder)/'synthetic.wav'
-                engine.save_to_file('NEXUS CPU memory check.',str(audio));engine.runAndWait()
+                engine.save_to_file('Hello Nexus, please check the processor and memory usage on my computer.',str(audio));engine.runAndWait()
                 result['sapi_file_synthesis']=audio.is_file() and audio.stat().st_size>44
                 if result['sapi_file_synthesis']:
                     recognizer=sr.Recognizer();recognizer.operation_timeout=6
                     with sr.AudioFile(str(audio)) as source:clip=recognizer.record(source)
+                    import audioop
+                    raw=clip.get_raw_data(convert_rate=16000,convert_width=2)
+                    result['synthetic_signal']={'duration_seconds':round(len(raw)/32000,2),'rms_pcm16':audioop.rms(raw,2)}
+                    normalized=sr.AudioData(raw,16000,2)
                     try:
-                        text=recognizer.recognize_google(clip,language='en-IN',endpoint='https://www.google.com/speech-api/v2/recognize')
+                        text=recognizer.recognize_google(normalized,language='en-IN',endpoint='https://www.google.com/speech-api/v2/recognize')
                         result['google_en_IN_synthetic']={'status':'response','text':text}
                     except Exception as exc:result['google_en_IN_synthetic']={'status':'unavailable','error_type':type(exc).__name__}
         finally:engine.stop()
