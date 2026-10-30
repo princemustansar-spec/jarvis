@@ -1,7 +1,7 @@
 name: NEXUS voice checks
 on:
   push:
-    branches: [feature/jarvis-voice-upgrade]
+    branches: [feature/jarvis-voice-upgrade, feature/automatic-model-router]
   pull_request:
     paths: ['NEXUS_AI_ULTRA/**', '.github/workflows/nexus-voice-checks.yml']
 permissions:
