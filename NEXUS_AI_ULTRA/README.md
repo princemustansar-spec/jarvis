@@ -108,3 +108,11 @@ For the previous "Microphone: network" issue, close the app and run `INSTALL_VOI
 ## JARVIS-style primary online voice (feature upgrade)
 
 Google SpeechRecognition with configurable `en-IN` default is now primary in the Voice Assistant UI, with the existing verified offline tiny model as fallback. Python capture calibrates noise and ends after configurable silence. Edge `en-IN-PrabhatNeural` output is opt-in, with allowed Windows voices as fallback; Asad/Uzma are excluded. No always-on microphone is enabled. The safe `install_update.ps1` backs up existing source/.venv, preserves user data, and supports rollback. Read **docs/JARVIS_VOICE_UPGRADE.md**; it supersedes the older offline-primary instructions and distinguishes actual tests from pending Windows microphone acceptance.
+
+## Automatic model router
+
+Enable and save a trusted compatible provider. Leave the model blank or enter AUTO for authenticated model discovery; enter an exact model ID for manual selection. FreeLLMAPI has default priority, followed by configured Gemini/Groq. A saved preferred provider overrides this order. Existing disabled providers stay disabled. Save before testing.
+
+Discovery is cached 10 minutes (failures 30 seconds), capped at 128 candidates, and refreshed on explicit endpoint tests or settings saves. Catalogs without capability metadata supply candidates; successful inference verifies chat support. Explicit non-chat entries and common embedding/audio/image IDs are excluded. Each provider attempts at most three eligible models; HTTP operation timeout is 6 seconds with a 45-second overall routing deadline. Models cool for at least 60 seconds after failures, numeric Retry-After up to 300 seconds. Authentication failures cool the whole provider. Successful models receive session priority. Health caches reset on restart; no additional local model or service is loaded.
+
+Keys remain in the OS credential vault and are reused on restart; environment overrides take precedence. Paid fallback still requires existing per-request approval. The chat header displays the successful provider/model and badges show connection status. A timeout may leave a provider-side request running, so fallback can duplicate usage. Actual FreeLLMAPI/Gemini/Groq verification requires running endpoints and credentials.

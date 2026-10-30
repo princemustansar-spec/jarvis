@@ -19,6 +19,56 @@ class Providers:
         self.store = store
         self.status = {}
         self.cooldowns = {}
+        self.discovery = {}
+        self.model_cooldowns = {}
+        self.working = {}
+        self.active = None
+        self.discovery_lock = asyncio.Lock()
+
+    @staticmethod
+    def chat_models(data):
+        # OpenAI catalogs often omit capabilities. Explicit non-chat entries are
+        # excluded; unknown entries are candidates, verified only by inference.
+        result = []
+        for item in data.get('data', []):
+            ident = item.get('id', '')
+            if not isinstance(ident, str) or not ident or len(ident) > 256:
+                continue
+            caps = item.get('capabilities', {})
+            if isinstance(caps, dict) and caps.get('chat') is False:
+                continue
+            if any(word in ident.lower() for word in ('embedding', 'whisper', 'tts', 'dall-e', 'moderation', 'rerank', 'stable-diffusion')):
+                continue
+            if ident not in result:
+                result.append(ident)
+            if len(result) >= 128:
+                break
+        return result
+
+    def router_status(self):
+        return dict(mode='AUTO', active=self.active, providers=self.status)
+
+    async def discover(self, p, force=False):
+        cache_key = (p['id'], p['base'])
+        async with self.discovery_lock:
+            cached = self.discovery.get(cache_key)
+            if not force and cached and cached[0] > time.monotonic():
+                return cached[1]
+            try:
+                if p['id'].startswith('freellm') and not self.key(p['id']):
+                    raise ValueError('FreeLLMAPI credential missing; save its API key in Settings')
+                async with httpx.AsyncClient(timeout=8, follow_redirects=False) as c:
+                    r = await c.get(p['base'].rstrip('/') + '/models', headers=self.headers(p))
+                    r.raise_for_status()
+                    models = self.chat_models(r.json())
+                result = dict(connected=True, models=models, error=None)
+                ttl = 600
+            except Exception as exc:
+                result = dict(connected=False, models=[], error=self.error(exc))
+                ttl = 30
+            self.discovery[cache_key] = (time.monotonic() + ttl, result)
+            self.status[p['id']] = result
+            return result
 
     def configs(self):
         return self.store.get('providers', DEFAULTS)
@@ -54,6 +104,11 @@ class Providers:
             raise ValueError('Provider IDs must be unique.')
         self.store.set('providers', clean)
         self.status.clear()
+        self.discovery.clear()
+        self.model_cooldowns.clear()
+        self.cooldowns.clear()
+        self.working.clear()
+        self.active = None
 
     def headers(self, p):
         k = self.key(p['id'])
@@ -63,16 +118,7 @@ class Providers:
         p = next((p for p in self.configs() if p['id'] == ident), None)
         if not p:
             raise ValueError('Unknown provider')
-        try:
-            async with httpx.AsyncClient(timeout=8, follow_redirects=False) as c:
-                r = await c.get(p['base'].rstrip('/') + '/models', headers=self.headers(p))
-                r.raise_for_status()
-                models = [m['id'] for m in r.json().get('data', [])]
-            result = dict(connected=True, models=models, error=None)
-        except Exception as exc:
-            result = dict(connected=False, models=[], error=self.error(exc))
-        self.status[ident] = result
-        return result
+        return await self.discover(p, force=True)
 
     @staticmethod
     def error(exc):
@@ -83,38 +129,76 @@ class Providers:
     async def request(self, messages, tools=None, allow_paid=False):
         errors = []
         preferred = self.store.get('preferred_provider', '')
-        configs = sorted(self.configs(), key=lambda p: p['id'] != preferred)
-        async with httpx.AsyncClient(timeout=60, follow_redirects=False) as c:
-            for p in configs:
-                if not p['enabled'] or not p['model']:
-                    continue
-                if p['paid'] and not allow_paid:
-                    errors.append(p['name'] + ': paid request requires your approval')
-                    continue
-                if self.cooldowns.get(p['id'], 0) > time.monotonic():
-                    errors.append(p['name'] + ': rate-limit cooldown active')
-                    continue
-                body = dict(model=p['model'], messages=messages)
-                if tools:
-                    body['tools'] = tools
-                for attempt in range(2):
-                    try:
-                        r = await c.post(p['base'].rstrip('/') + '/chat/completions', json=body, headers=self.headers(p))
-                        if r.status_code == 429:
-                            self.cooldowns[p['id']] = time.monotonic() + 60
-                        if r.status_code in (502, 503, 504) and attempt == 0:
-                            await asyncio.sleep(0.5)
+        configs = sorted(self.configs(), key=lambda p: (
+            p['id'] != preferred if preferred else not p['id'].startswith('freellm'),
+            0 if p['id'].startswith('freellm') else 1 if p['id'] in ('gemini', 'groq') else 2))
+        self.active = None
+        # A bounded overall deadline prevents large catalogs multiplying latency.
+        try:
+            async with asyncio.timeout(45):
+                async with httpx.AsyncClient(timeout=httpx.Timeout(6, connect=3), follow_redirects=False) as c:
+                    for p in configs:
+                        if not p['enabled']:
                             continue
-                        r.raise_for_status()
-                        data = r.json()
-                        msg = data['choices'][0]['message']
-                        self.status[p['id']] = dict(connected=True, models=[data.get('model', p['model'])], error=None)
-                        return msg, p['name'], data.get('model', p['model'])
-                    except (httpx.HTTPError, ValueError, KeyError, IndexError) as exc:
-                        self.status[p['id']] = dict(connected=False, models=[], error=self.error(exc))
-                        errors.append(p['name'] + ': ' + self.error(exc))
-                        break
-        raise ValueError('; '.join(errors) or 'No enabled provider with a model. Configure and test one in Settings.')
+                        if p['paid'] and not allow_paid:
+                            errors.append(p['name'] + ': paid request requires your approval')
+                            continue
+                        if self.cooldowns.get(p['id'], 0) > time.monotonic():
+                            errors.append(p['name'] + ': provider cooldown active')
+                            continue
+                        manual = p.get('model', '').strip()
+                        if manual and manual.upper() != 'AUTO':
+                            models = [manual]
+                        else:
+                            discovered = await self.discover(p)
+                            models = discovered['models']
+                            if not models:
+                                errors.append(p['name'] + ': ' + (discovered['error'] or 'no chat model candidates'))
+                                continue
+                        models = sorted(models, key=lambda m: -self.working.get((p['id'], m), 0))
+                        # Reserve opportunities for fallback providers even with huge catalogs.
+                        attempted = 0
+                        for model in models:
+                            key = (p['id'], model)
+                            if self.model_cooldowns.get(key, 0) > time.monotonic():
+                                errors.append(p['name'] + ': model cooldown active')
+                                continue
+                            if attempted >= 3:
+                                break
+                            attempted += 1
+                            body = dict(model=model, messages=messages)
+                            if tools:
+                                body['tools'] = tools
+                            try:
+                                r = await c.post(p['base'].rstrip('/') + '/chat/completions', json=body, headers=self.headers(p))
+                                r.raise_for_status()
+                                data = r.json()
+                                msg = data['choices'][0]['message']
+                                if not isinstance(msg, dict) or not (msg.get('content') or msg.get('tool_calls')):
+                                    raise ValueError('Model returned no assistant content or tool calls')
+                                actual = data.get('model', model)
+                                self.working[key] = time.monotonic()
+                                self.status[p['id']] = dict(connected=True, models=models, error=None)
+                                self.active = dict(provider=p['name'], provider_id=p['id'], model=actual)
+                                return msg, p['name'], actual
+                            except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as exc:
+                                delay = 60
+                                if isinstance(exc, httpx.HTTPStatusError):
+                                    if exc.response.status_code == 429:
+                                        try:
+                                            delay = min(300, max(60, float(exc.response.headers.get('Retry-After', '60'))))
+                                        except ValueError:
+                                            pass
+                                    if exc.response.status_code in (401, 403):
+                                        self.cooldowns[p['id']] = time.monotonic() + 60
+                                self.model_cooldowns[key] = time.monotonic() + delay
+                                self.status[p['id']] = dict(connected=False, models=models, error=self.error(exc))
+                                errors.append(p['name'] + ': ' + self.error(exc))
+                                if self.cooldowns.get(p['id'], 0) > time.monotonic():
+                                    break
+        except TimeoutError:
+            errors.append('Router request deadline exceeded')
+        raise ValueError('; '.join(errors[-8:]) or 'No enabled provider with a model. Enable a provider in Settings; blank model uses AUTO discovery.')
 
     async def image(self, ident, prompt, allow_paid=False):
         p = next((p for p in self.configs() if p['id'] == ident and p['enabled']), None)

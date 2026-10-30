@@ -89,7 +89,7 @@ app.mount('/static', StaticFiles(directory=BASE / 'static'), name='static')
 
 @app.get('/api/state')
 def state():
-    return dict(token=session_token, name=store.get('name','NEXUS AI ULTRA'), providers=providers.configs(), provider_status=providers.status,
+    return dict(token=session_token, name=store.get('name','NEXUS AI ULTRA'), providers=providers.configs(), provider_status=providers.status, router=providers.router_status(),
                 monitor=tools.monitor(), tools=[dict(name=n,description=d,sensitive=s,args=a) for n,(d,s,a) in CATALOG.items()],
                 emergency=emergency, denied_tools=store.get('denied_tools', []), pending=[dict(id=k,**v) for k,v in pending.items() if v['expires'] > time.time()],
                 roots=tools.roots(),
