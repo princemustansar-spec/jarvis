@@ -20,6 +20,7 @@ class Providers:
         self.status = {}
         self.cooldowns = {}
         self.discovery = {}
+        self.endpoints = {}
         self.model_cooldowns = {}
         self.working = {}
         self.active = None
@@ -58,7 +59,21 @@ class Providers:
                 if p['id'].startswith('freellm') and not self.key(p['id']):
                     raise ValueError('FreeLLMAPI credential missing; save its API key in Settings')
                 async with httpx.AsyncClient(timeout=8, follow_redirects=False) as c:
-                    r = await c.get(p['base'].rstrip('/') + '/models', headers=self.headers(p))
+                    try:
+                        r = await c.get(p['base'].rstrip('/') + '/models', headers=self.headers(p))
+                    except httpx.ConnectError:
+                        r = None
+                    u = urlparse(p['base'])
+                    if (p['id'].startswith('freellm') and u.hostname in ('localhost', '127.0.0.1')
+                            and u.port in (31415, 3847) and (r is None or r.status_code == 404)):
+                        alternate = 3847 if u.port == 31415 else 31415
+                        base = p['base'].replace(':' + str(u.port), ':' + str(alternate), 1)
+                        r = await c.get(base + '/models', headers=self.headers(p))
+                        r.raise_for_status()
+                        self.endpoints[p['id']] = base
+                        p['base'] = base
+                    if r is None:
+                        raise ValueError('API endpoint unavailable')
                     r.raise_for_status()
                     models = self.chat_models(r.json())
                 result = dict(connected=True, models=models, error=None)
@@ -70,8 +85,34 @@ class Providers:
             self.status[p['id']] = result
             return result
 
+    @staticmethod
+    def normalize(p):
+        p = dict(p)
+        base = p.get('base', '').strip().rstrip('/')
+        default = next((d for d in DEFAULTS if d['id'] == p['id']), None)
+        if not base and default:
+            base = default['base']
+        # Accept pasted resource URLs without appending the resource twice.
+        for suffix in ('/chat/completions', '/models'):
+            if base.endswith(suffix):
+                base = base[:-len(suffix)]
+                break
+        u = urlparse(base)
+        canonical = {
+            'api.groq.com': 'https://api.groq.com/openai/v1',
+            'generativelanguage.googleapis.com': 'https://generativelanguage.googleapis.com/v1beta/openai',
+            'openrouter.ai': 'https://openrouter.ai/api/v1',
+        }
+        if u.hostname in canonical and not (u.username or u.password or u.query or u.fragment):
+            base = canonical[u.hostname]
+        elif u.hostname in ('localhost', '127.0.0.1', '::1') and not u.path:
+            base += '/v1'
+        p['base'] = base
+        p['model'] = p.get('model', '').strip()
+        return p
+
     def configs(self):
-        return self.store.get('providers', DEFAULTS)
+        return [self.normalize({**p, 'base': self.endpoints.get(p['id'], p['base'])}) for p in self.store.get('providers', DEFAULTS)]
 
     def key(self, ident):
         value = os.getenv('NEXUS_KEY_' + ident.upper().replace('-', '_'))
@@ -85,6 +126,7 @@ class Providers:
     def save(self, configs):
         clean = []
         for p in configs:
+            p = self.normalize(p)
             ident = p['id']
             if not ident.replace('-', '').replace('_', '').isalnum():
                 raise ValueError('Provider ID must contain letters, numbers, underscores or hyphens.')
@@ -105,6 +147,7 @@ class Providers:
         self.store.set('providers', clean)
         self.status.clear()
         self.discovery.clear()
+        self.endpoints.clear()
         self.model_cooldowns.clear()
         self.cooldowns.clear()
         self.working.clear()
@@ -194,6 +237,12 @@ class Providers:
                                 self.model_cooldowns[key] = time.monotonic() + delay
                                 self.status[p['id']] = dict(connected=False, models=models, error=self.error(exc))
                                 errors.append(p['name'] + ': ' + self.error(exc))
+                                # A stale manual model must not strand this provider.
+                                # Auth failures belong to the provider, not the model.
+                                if manual and not (isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code == 429) and not self.cooldowns.get(p['id'], 0) > time.monotonic():
+                                    discovered = await self.discover(p)
+                                    models.extend(m for m in discovered['models'] if m not in models)
+                                    manual = ''
                                 if self.cooldowns.get(p['id'], 0) > time.monotonic():
                                     break
         except TimeoutError:
