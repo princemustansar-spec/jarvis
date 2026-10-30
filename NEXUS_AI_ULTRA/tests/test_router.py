@@ -77,3 +77,74 @@ def test_missing_freellm_credential_prevents_unauthenticated_scan(monkeypatch):
     monkeypatch.setattr(p,'key',lambda ident:None)
     with pytest.raises(ValueError,match='credential missing'):
         asyncio.run(p.request([]))
+
+@pytest.mark.parametrize('base', ['', 'https://api.groq.com', 'https://api.groq.com/v1', 'https://api.groq.com/openai/v1/chat/completions'])
+def test_groq_endpoint_normalization(base):
+    p=config('groq',paid=True);p['base']=base
+    normalized=Providers.normalize(p)
+    assert normalized['base']=='https://api.groq.com/openai/v1'
+    assert normalized['paid'] is True
+
+
+def test_stale_manual_model_falls_back_to_discovered_model(monkeypatch):
+    calls=[]
+    def handler(req):
+        calls.append(req)
+        if req.method=='GET':return httpx.Response(200,json={'data':[{'id':'fresh'}]})
+        model=json.loads(req.content)['model']
+        return httpx.Response(404) if model=='retired' else ok(model)
+    p=setup(monkeypatch,[config('groq',model='retired',paid=True)],handler)
+    with pytest.raises(ValueError,match='approval'):asyncio.run(p.request([]))
+    assert calls==[]
+    assert asyncio.run(p.request([],allow_paid=True))[2]=='fresh'
+    assert [r.method for r in calls]==['POST','GET','POST']
+
+
+def test_saved_freellm_paid_flag_is_not_silently_removed(monkeypatch):
+    def handler(req):raise AssertionError('no paid request without approval')
+    p=setup(monkeypatch,[config(model='auto',paid=True)],handler)
+    with pytest.raises(ValueError,match='approval'):asyncio.run(p.request([]))
+
+
+def test_connect_saves_enables_discovers_and_keeps_vault(tmp_path, monkeypatch):
+    import importlib
+    monkeypatch.setenv('NEXUS_DATA_DIR',str(tmp_path))
+    import nexus.app
+    app=importlib.reload(nexus.app)
+    vault={}
+    monkeypatch.setattr('nexus.providers.keyring.set_password',lambda service,ident,key:vault.update({ident:key}))
+    monkeypatch.setattr('nexus.providers.keyring.get_password',lambda service,ident:vault.get(ident))
+    real=httpx.AsyncClient
+    def handler(req):
+        assert req.method=='GET' and req.url.path=='/openai/v1/models'
+        assert req.headers['authorization']=='Bearer synthetic-key'
+        return httpx.Response(200,json={'data':[{'id':'chat-model'}]})
+    monkeypatch.setattr(httpx,'AsyncClient',lambda **kw:real(transport=httpx.MockTransport(handler),**kw))
+    async def run():
+        async with real(transport=httpx.ASGITransport(app=app.app),base_url='http://127.0.0.1',headers={'x-nexus-token':app.session_token}) as client:
+            assert (await client.post('/api/providers/groq/connect',json={'key':'synthetic-key','base':'https://api.groq.com/v1'})).json()['models']==['chat-model']
+            assert (await client.post('/api/providers/groq/connect',json={'key':''})).json()['connected']
+            assert (await client.post('/api/providers/missing/connect',json={})).status_code==400
+    asyncio.run(run())
+    groq=next(p for p in app.providers.configs() if p['id']=='groq')
+    assert groq['enabled'] and groq['paid']
+    assert vault['groq']=='synthetic-key'
+    assert 'synthetic-key' not in json.dumps(app.store.get('providers'))
+
+
+@pytest.mark.parametrize('failure', ['404', 'connection'])
+def test_freellm_detects_alternate_local_port(monkeypatch, failure):
+    cfg=config();cfg['base']='http://127.0.0.1:31415/v1'
+    def handler(req):
+        if req.url.port==31415:
+            if failure=='connection':raise httpx.ConnectError('unavailable',request=req)
+            return httpx.Response(404)
+        if req.method=='GET':return httpx.Response(200,json={'data':[{'id':'local-chat'}]})
+        assert req.url.port==3847
+        return ok('local-chat')
+    p=setup(monkeypatch,[cfg],handler)
+    async def run():
+        assert (await p.probe('freellm'))['connected']
+        assert (await p.request([]))[2]=='local-chat'
+    asyncio.run(run())
+    assert p.configs()[0]['base']=='http://127.0.0.1:3847/v1'

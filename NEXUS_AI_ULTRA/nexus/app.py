@@ -110,6 +110,18 @@ async def settings(request: Request):
         store.set('roots', roots)
     return dict(saved=True)
 
+@app.post('/api/providers/{ident}/connect')
+async def connect_provider(ident: str, request: Request):
+    existing = providers.configs()
+    saved = next((p for p in existing if p['id'] == ident), None)
+    if saved is None:
+        raise ValueError('Unknown provider')
+    body = await request.json()
+    updated = {**saved, **{k: body[k] for k in ('base', 'model', 'key', 'paid') if k in body}, 'enabled': True}
+    providers.save([updated if p['id'] == ident else p for p in existing])
+    return await providers.probe(ident)
+
+
 @app.post('/api/providers/{ident}/test')
 async def test_provider(ident: str):
     return await providers.probe(ident)
